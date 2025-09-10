@@ -7,6 +7,7 @@ from neo4j import GraphDatabase, Transaction
 from collections.abc import Sequence
 from langchain_core.documents import Document
 from typing import Any
+from textblob import TextBlob
 
 
 load_dotenv()
@@ -43,6 +44,7 @@ def get_course_data(llm: OpenAI, chunk: Document) -> dict[str, Any]:
     data["url"] = f"https://graphacademy.neo4j.com/courses/{data['course']}/{data['module']}/{data['lesson']}"
     data["text"] = chunk.page_content
     data["embedding"] = get_embedding(llm, data["text"])
+    data["topics"] = TextBlob(data["text"]).noun_phrases
 
     return data
 
@@ -68,6 +70,11 @@ def create_chunk(tx: Transaction, data: dict[str, Any]) -> None:
         MERGE (l)-[:CONTAINS]->(p:Paragraph{text: $text})
         WITH p
         CALL db.create.setNodeVectorProperty(p, "embedding", $embedding)
+           
+        FOREACH (topic in $topics |
+            MERGE (t:Topic {name: topic})
+            MERGE (p)-[:MENTIONS]->(t)
+        )
         """, 
         data
     )
